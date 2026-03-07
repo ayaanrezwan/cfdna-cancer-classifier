@@ -8,6 +8,9 @@ from sklearn.metrics import (confusion_matrix, classification_report,
                              roc_curve, auc)
 from sklearn.model_selection import StratifiedKFold, learning_curve
 from sklearn.preprocessing import LabelEncoder
+import sys
+sys.path.insert(0, os.path.dirname(__file__))
+from model import TopVarianceSelector
 
 # ── Config ────────────────────────────────────────────────────────────────────
 DATA_DIR    = os.path.join(os.path.dirname(__file__), '..', 'data')
@@ -27,8 +30,14 @@ def load_all():
     y   = data['y']
     clf = model_data['model']
     le  = model_data['label_encoder']
+    selected_probes = model_data['selected_probes']
     y_enc = le.transform(y)
-    return X, y, y_enc, clf, le
+
+    # Convert to numpy array — pipeline uses integer indexing internally
+    X_arr = X.values
+
+    print(f"Loaded: X={X_arr.shape}, y={y.shape}")
+    return X_arr, y, y_enc, clf, le, selected_probes
 
 # ── Plot 1: Confusion Matrix ──────────────────────────────────────────────────
 def plot_confusion_matrix(clf, X, y_enc, le):
@@ -163,31 +172,18 @@ def plot_learning_curve(clf, X, y_enc):
     print(f"  Saved → {path}")
 
 # ── Plot 4: Top Feature Importances ──────────────────────────────────────────
-def plot_feature_importances(clf, X, le, top_n=20):
-    """
-    Random Forests compute a 'feature importance' score for each input feature.
-    It measures how much each CpG probe reduces impurity (uncertainty) across
-    all trees on average.
-
-    High importance = this CpG probe's methylation is highly predictive
-                      of whether a sample is cancerous or healthy.
-
-    These probes are biologically meaningful — you can look them up in
-    databases like UCSC Genome Browser or Illumina's manifest to find
-    which genes they sit in or near.
-    """
+def plot_feature_importances(rf, selected_probes, le, top_n=20):
     print(f"\nPlotting top {top_n} feature importances...")
-    importances = clf.feature_importances_
-    feat_names  = X.columns
+    importances = rf.feature_importances_
     feat_df = pd.DataFrame({
-        'probe':      feat_names,
+        'probe':      selected_probes,
         'importance': importances
     }).sort_values('importance', ascending=False).head(top_n)
 
     fig, ax = plt.subplots(figsize=(8, 7))
-    bars = ax.barh(feat_df['probe'][::-1],
-                   feat_df['importance'][::-1],
-                   color='#4CAF50', edgecolor='white')
+    ax.barh(feat_df['probe'][::-1],
+            feat_df['importance'][::-1],
+            color='#4CAF50', edgecolor='white')
     ax.set_xlabel('Mean Decrease in Impurity (Feature Importance)', fontsize=11)
     ax.set_title(f'Top {top_n} Most Predictive CpG Probes', fontsize=13)
     ax.tick_params(axis='y', labelsize=8)
@@ -197,19 +193,19 @@ def plot_feature_importances(clf, X, le, top_n=20):
     plt.savefig(path, dpi=150)
     plt.close()
     print(f"  Saved → {path}")
-
     print(f"\n  Top 5 predictive probes:")
     print(feat_df.head(5).to_string(index=False))
-    return feat_df
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 def main():
-    X, y, y_enc, clf, le = load_all()
+    X, y, y_enc, clf, le, selected_probes = load_all()
 
     plot_confusion_matrix(clf, X, y_enc, le)
     plot_roc_curve(clf, X, y_enc, le)
     plot_learning_curve(clf, X, y_enc)
-    plot_feature_importances(clf, X, le)
+
+    rf = clf.named_steps['clf']
+    plot_feature_importances(rf, selected_probes, le)
 
     print("\n✓ All plots saved to results/figures/")
 
