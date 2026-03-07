@@ -96,6 +96,7 @@ def align(X: pd.DataFrame, meta: pd.DataFrame):
     return X, meta
 
 # ── Main ──────────────────────────────────────────────────────────────────────
+# ── Main ──────────────────────────────────────────────────────────────────────
 def main():
     # 1. Load
     beta, meta = load_data()
@@ -106,19 +107,20 @@ def main():
     # 3. Impute
     beta = impute(beta)
 
-    # 4. Variance filter
-    beta = select_top_variable(beta, TOP_N_PROBES)
+    # NOTE: We intentionally do NOT do variance filtering here.
+    # Variance filtering will happen inside the cross-validation pipeline
+    # in model.py to prevent data leakage into test folds.
 
-    # 5. Transpose to samples × features
+    # 4. Transpose to samples × features
     X = transpose_to_samples(beta)
 
-    # 6. Align
+    # 5. Align
     X, meta = align(X, meta)
 
-    # 7. Extract labels
+    # 6. Extract labels
     y = meta['label']
 
-    # 8. Save
+    # 7. Save
     print(f"\nSaving processed data to {PROCESSED_PATH}")
     with open(PROCESSED_PATH, 'wb') as f:
         pickle.dump({'X': X, 'y': y}, f)
