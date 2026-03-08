@@ -23,13 +23,13 @@ def load_model():
 
 # ── Page config ───────────────────────────────────────────────────────────────
 st.set_page_config(
-    page_title="cfDNA Lung Cancer Classifier",
+    page_title="earlySignal - Liquid Biopsy Cancer Detection",
     page_icon="🫁",
     layout="wide"
 )
 
 # ── Header ────────────────────────────────────────────────────────────────────
-st.title("🫁 cfDNA Methylation — Lung Cancer Classifier")
+st.title("🫁 earlySignal - Liquid Biopsy Cancer Detection")
 st.markdown("""
 **A machine learning pipeline for early lung cancer detection from DNA methylation patterns.**
 
