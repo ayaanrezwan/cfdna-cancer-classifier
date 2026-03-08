@@ -8,7 +8,7 @@ A machine learning pipeline for early lung cancer detection using DNA methylatio
 
 Lung cancer is the **#1 cancer killer in Canada**, responsible for ~25% of all cancer deaths and claiming approximately 21,000 Canadian lives annually. The core challenge is late detection — most cases are diagnosed at Stage III or IV, when the 5-year survival rate drops below 15%. Caught at Stage I, survival exceeds 80%.
 
-Current screening (low-dose CT) is only recommended for high-risk smokers, leaving the majority of the population unscreened and left in . A minimally invasive blood-based test could change this.
+Current screening (low-dose CT) is only recommended for high-risk smokers, leaving the majority of the population unscreened and left to wait for more than 8.8 weeks before a CT scan. A minimally invasive blood-based test could change this.
 
 Project was heavily inspired by Dr. Fei Geng's work at McMaster University
 with early cancer detection using blood plasma. His work highlights the
