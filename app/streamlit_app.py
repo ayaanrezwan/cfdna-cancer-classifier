@@ -12,7 +12,7 @@ from model import TopVarianceSelector
 # ── Config ────────────────────────────────────────────────────────────────────
 DATA_DIR   = os.path.join(os.path.dirname(__file__), '..', 'data')
 MODEL_PATH = os.path.join(DATA_DIR, 'model.pkl')
-FIGS_DIR   = os.path.join(os.path.dirname(__file__), '..', 'results', 'figures')
+FIGS_DIR = os.path.normpath(os.path.join(os.path.abspath(os.path.dirname(__file__)), '..', 'results', 'figures'))
 
 # ── Load model (cached so it only loads once) ─────────────────────────────────
 @st.cache_resource
@@ -74,7 +74,7 @@ st.sidebar.markdown("**Built at Hack Canada 2026**")
 st.sidebar.markdown("TCGA data via [UCSC Xena](https://xenabrowser.net)")
 
 # ── Tabs ──────────────────────────────────────────────────────────────────────
-tab1, tab2, tab3 = st.tabs(["🔬 Live Prediction", "📊 Model Performance", "🧬 Biology"])
+tab1, tab2, tab3, tab4 = st.tabs(["🔬 Live Prediction", "📊 Model Performance", "🧪 Tumor Fraction", "🧬 Biology"])
 
 # ════════════════════════════════════════════════════════════════════════════
 # TAB 1: Live Prediction
@@ -236,9 +236,204 @@ with tab2:
         st.image(fi_path, caption="Top 20 Most Predictive CpG Probes")
 
 # ════════════════════════════════════════════════════════════════════════════
-# TAB 3: Biology
+# TAB 3: Tumor Fraction Simulation
 # ════════════════════════════════════════════════════════════════════════════
 with tab3:
+    st.header("🧪 In Silico Tumor Fraction Simulation")
+    st.markdown("""
+    This is the clinically honest part of the project.
+
+    Our classifier achieves **AUC = 1.0 on bulk tissue biopsies** — but that's the easy version 
+    of the problem. In a real blood test, tumor-derived DNA is **0.1–5% of total cfDNA**. 
+    The rest comes from healthy cells. Use the slider below to simulate what happens to model 
+    performance as that signal gets diluted.
+    """)
+
+    st.divider()
+
+    # ── Slider ────────────────────────────────────────────────────────────────
+    tumor_pct = st.slider(
+        "Tumor fraction in simulated plasma (%)",
+        min_value=1,
+        max_value=100,
+        value=100,
+        step=1,
+        help="In early-stage lung cancer, plasma cfDNA is typically 0.1–5% tumor-derived."
+    )
+    tumor_fraction = tumor_pct / 100.0
+
+    # ── Run simulation at selected fraction ───────────────────────────────────
+    @st.cache_data
+    def run_single_fraction(tumor_fraction: float, n_simulations: int = 50):
+        """Simulate AUC at a single tumor fraction."""
+        from sklearn.metrics import roc_auc_score
+
+        with open(os.path.join(DATA_DIR, 'processed.pkl'), 'rb') as f:
+            data = pickle.load(f)
+        with open(MODEL_PATH, 'rb') as f:
+            model_data = pickle.load(f)
+
+        X = data['X'].values
+        y = data['y'].values
+        clf = model_data['model']
+
+        X_tumor   = X[y == 'Lung Cancer']
+        X_healthy = X[y == 'Healthy']
+
+        rng = np.random.default_rng(42)
+
+        # Simulate cancer-positive plasma samples
+        sim_cancer = []
+        for _ in range(n_simulations):
+            t = X_tumor[rng.integers(0, len(X_tumor))]
+            h = X_healthy[rng.integers(0, len(X_healthy))]
+            plasma = tumor_fraction * t + (1 - tumor_fraction) * h
+            plasma = np.clip(plasma + rng.normal(0, 0.01, size=plasma.shape), 0, 1)
+            sim_cancer.append(plasma)
+
+        # Simulate cancer-negative plasma samples
+        sim_healthy = []
+        for _ in range(n_simulations):
+            h1 = X_healthy[rng.integers(0, len(X_healthy))]
+            h2 = X_healthy[rng.integers(0, len(X_healthy))]
+            plasma = np.clip(h1 + rng.normal(0, 0.01, size=h1.shape), 0, 1)
+            sim_healthy.append(plasma)
+
+        X_sim = np.vstack([sim_cancer, sim_healthy])
+        y_sim = np.array([1] * n_simulations + [0] * n_simulations)
+
+        y_prob = clf.predict_proba(X_sim)[:, 1]
+        y_pred = clf.predict(X_sim)
+        auc    = roc_auc_score(y_sim, y_prob)
+        acc    = (y_pred == y_sim).mean()
+
+        return auc, acc
+
+    @st.cache_data
+    def run_full_curve(n_simulations: int = 50):
+        """Pre-compute AUC across all fractions for the curve."""
+        from sklearn.metrics import roc_auc_score
+
+        with open(os.path.join(DATA_DIR, 'processed.pkl'), 'rb') as f:
+            data = pickle.load(f)
+        with open(MODEL_PATH, 'rb') as f:
+            model_data = pickle.load(f)
+
+        X = data['X'].values
+        y = data['y'].values
+        clf = model_data['model']
+
+        X_tumor   = X[y == 'Lung Cancer']
+        X_healthy = X[y == 'Healthy']
+
+        fractions = [1.00, 0.50, 0.25, 0.10, 0.05, 0.03, 0.01]
+        rng = np.random.default_rng(42)
+        results = []
+
+        for tf in fractions:
+            sim_cancer = []
+            for _ in range(n_simulations):
+                t = X_tumor[rng.integers(0, len(X_tumor))]
+                h = X_healthy[rng.integers(0, len(X_healthy))]
+                plasma = tf * t + (1 - tf) * h
+                plasma = np.clip(plasma + rng.normal(0, 0.01, size=plasma.shape), 0, 1)
+                sim_cancer.append(plasma)
+
+            sim_healthy = []
+            for _ in range(n_simulations):
+                h1 = X_healthy[rng.integers(0, len(X_healthy))]
+                plasma = np.clip(h1 + rng.normal(0, 0.01, size=h1.shape), 0, 1)
+                sim_healthy.append(plasma)
+
+            X_sim = np.vstack([sim_cancer, sim_healthy])
+            y_sim = np.array([1] * n_simulations + [0] * n_simulations)
+
+            y_prob = clf.predict_proba(X_sim)[:, 1]
+            auc    = roc_auc_score(y_sim, y_prob)
+            y_pred = clf.predict(X_sim)
+            acc = (y_pred == y_sim).mean()
+            results.append({'tumor_fraction_pct': tf * 100, 'auc': auc})
+
+        return pd.DataFrame(results)
+
+    # ── Metrics at selected fraction ──────────────────────────────────────────
+    with st.spinner(f"Simulating plasma at {tumor_pct}% tumor fraction..."):
+        auc, acc = run_single_fraction(tumor_fraction)
+
+    col1, col2, col3 = st.columns(3)
+
+    with col1:
+        st.metric("Tumor Fraction", f"{tumor_pct}%")
+    with col2:
+        delta = f"{auc - 1.0:.3f}" if auc < 1.0 else None
+        st.metric("AUC at this fraction", f"{auc:.3f}", delta=delta)
+    with col3:
+        if tumor_pct <= 5:
+            st.error("⚠️ Clinical cfDNA range — signal severely diluted")
+        elif tumor_pct <= 15:
+            st.warning("🟡 Low tumor burden — performance degrading")
+        else:
+            st.success("🟢 High tumor fraction — strong signal")
+
+    st.divider()
+
+    # ── Full degradation curve ────────────────────────────────────────────────
+    st.subheader("AUC Degradation Curve")
+
+    with st.spinner("Computing full curve..."):
+        curve_df = run_full_curve()
+
+    fig, ax = plt.subplots(figsize=(9, 5))
+
+    ax.semilogx(
+        curve_df['tumor_fraction_pct'],
+        curve_df['auc'],
+        'o-', color='#2196F3', lw=2.5, markersize=8,
+        label='Model AUC'
+    )
+
+    # Mark the selected fraction
+    ax.axvline(
+        x=tumor_pct,
+        color='#FF5722', lw=2, linestyle='--',
+        label=f'Selected: {tumor_pct}%'
+    )
+    ax.axhline(0.5, color='gray', lw=1, linestyle=':', label='Random classifier (AUC = 0.5)')
+    ax.axvspan(0.1, 5, alpha=0.12, color='orange', label='Typical plasma cfDNA range (0.1–5%)')
+
+    ax.set_xlabel('Tumor Fraction in Simulated Plasma (%)', fontsize=12)
+    ax.set_ylabel('AUC', fontsize=12)
+    ax.set_title('Model Performance Degrades as Tumor Signal Dilutes\n'
+                 'This is the core unsolved problem in liquid biopsy', fontsize=12)
+    ax.legend(fontsize=9, loc='lower right')
+    ax.set_ylim([0, 1.05])
+    ax.grid(True, alpha=0.3)
+    ax.set_xticks([1, 5, 10, 25, 50, 100])
+    ax.set_xticklabels(['1%', '5%', '10%', '25%', '50%', '100%'])
+
+    plt.tight_layout()
+    st.pyplot(fig)
+    plt.close()
+
+    # ── Honest interpretation ─────────────────────────────────────────────────
+    st.divider()
+    st.subheader("What this means")
+    st.markdown(f"""
+    At **{tumor_pct}% tumor fraction**, the model achieves **AUC = {auc:.3f}**.
+
+    {"🔴 **This is within the clinical cfDNA range.** In early-stage lung cancer, plasma cfDNA is typically 0.1–5% tumor-derived. At this dilution, the model performs near-randomly — not because the model is weak, but because the methylation signal is overwhelmed by healthy cell DNA. This is the binding constraint in liquid biopsy research." if tumor_pct <= 5 else
+     "🟡 **This is below typical tumor biopsy conditions but above clinical cfDNA range.** Performance is degrading. This simulates a late-stage cancer patient or a high-shedding tumor." if tumor_pct <= 15 else
+     "🟢 **This approximates bulk tissue conditions** — similar to what the model was trained on. Performance is strong here, but this doesn't reflect real plasma cfDNA."}
+
+    **The key takeaway:** Solving liquid biopsy requires either training directly on plasma cfDNA data,
+    deconvolution models that estimate tumor fraction first, or feature selection optimized for 
+    low-fraction detection. That's the next step for this project.
+    """)
+
+# ════════════════════════════════════════════════════════════════════════════
+# TAB 4: Biology
+# ════════════════════════════════════════════════════════════════════════════
+with tab4:
     st.header("The Biology Behind This Project")
 
     st.subheader("What is cell-free DNA (cfDNA)?")
