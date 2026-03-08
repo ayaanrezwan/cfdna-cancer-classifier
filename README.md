@@ -10,6 +10,10 @@ Lung cancer is the **#1 cancer killer in Canada**, responsible for ~25% of all c
 
 Current screening (low-dose CT) is only recommended for high-risk smokers, leaving the majority of the population unscreened. A minimally invasive blood-based test could change this.
 
+Project was heavily inspired by Dr. Fei Geng's work at McMaster University
+with early cancer detection using blood plasma. His work highlights the
+limitations to the model as well as the next steps for the project.
+
 ---
 
 ## The Biology
