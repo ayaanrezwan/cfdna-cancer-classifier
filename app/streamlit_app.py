@@ -28,8 +28,22 @@ st.set_page_config(
     layout="wide"
 )
 
+st.markdown("""
+    <style>
+    .highlight-a { color: #4CAF50; font-weight: bold; }  /* Adenine — green */
+    .highlight-t { color: #F44336; font-weight: bold; }  /* Thymine — red */
+    .highlight-g { color: #FF9800; font-weight: bold; }  /* Guanine — orange */
+    .highlight-c { color: #9C27B0; font-weight: bold; }  /* Cytosine — purple */
+    </style>
+""", unsafe_allow_html=True)
+
 # ── Header ────────────────────────────────────────────────────────────────────
-st.title("🫁 earlySignal - Liquid Biopsy Cancer Detection")
+col1, col2 = st.columns([1, 4])
+with col1:
+    st.image("app/assets/earlysignallogo.jpg", width=150)
+with col2:
+    st.title("earlySignal")
+    st.caption("Liquid biopsy · DNA methylation · Lung cancer detection")
 st.markdown("""
 **A machine learning pipeline for early lung cancer detection from DNA methylation patterns.**
 
